@@ -160,7 +160,7 @@ static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
         len = GetModuleFileNameW(handle, buffer.data(), buffer.size());
     } while(len > buffer.size());
 
-    if (len) result = std::filesystem::proximate(std::filesystem::path(buffer.begin(), buffer.begin()+len).parent_path());
+    if (len) result = std::filesystem::path(buffer.begin(), buffer.begin()+len).parent_path();
     return len;
 }
 
