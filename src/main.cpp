@@ -106,7 +106,7 @@ static void __fastcall setPaletteSelect(SokuLib::Select* selectObj, int unused, 
                 palettes[playerId]->currentPalette = palettes[playerId]->list->opponentPalette;
                 if (palettes[playerId]->currentPalette < 0) palettes[playerId]->currentPalette = 0;
             }
-        } else if (palettes[playerId]->list->opponentPalette == -2)
+        } else if (palettes[playerId] && palettes[playerId]->list->opponentPalette == -2)
             palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
     } else palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
 
