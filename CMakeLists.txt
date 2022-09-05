@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 string(TIMESTAMP PLP_VER_DAY "%m%d" UTC)
 string(TIMESTAMP PLP_VER_YEAR "%Y" UTC)
 project(palette-picker
-    VERSION 0.1.${PLP_VER_YEAR}.${PLP_VER_DAY}
+    VERSION 0.2.${PLP_VER_YEAR}.${PLP_VER_DAY}
     DESCRIPTION "Palette picker for a specific fighting game.")
 set(PLP_VERSION ${PROJECT_VERSION})
 string(REPLACE . , PLP_VERSION_COMMA ${PLP_VERSION})

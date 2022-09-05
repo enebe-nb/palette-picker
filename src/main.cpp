@@ -11,18 +11,15 @@ std::filesystem::path configPath;
 std::ofstream logging("palette-picker.log");
 #endif
 
-PaletteList* palettes[2] = {0, 0};
+PaletteInput* palettes[2] = {0, 0};
 int loadId = 0;
 
 namespace {
     auto orig_setPaletteSelect = reinterpret_cast<void (__fastcall*)(SokuLib::Select*, int, int, int, int, bool)>(0x41fe60);
     auto orig_copyPaletteAddr = reinterpret_cast<int (*)(char*, const char*, const char*, int)>(0x8571d8);
-    auto orig_connectToGame = reinterpret_cast<int (__fastcall*)(int, int, int, int, int, int)>(0x415610);
-    auto orig_selectOnEnter = reinterpret_cast<void (__fastcall*)(int, int, int)>(0x4222c0);
-    auto orig_selectCLOnEnter = reinterpret_cast<void (__fastcall*)(int, int, int)>(0x428410);
-    auto orig_selectSVOnEnter = reinterpret_cast<void (__fastcall*)(int, int, int)>(0x428410);
     auto orig_selectOnRender = reinterpret_cast<int (__fastcall*)(SokuLib::Select*)>(0x420c30);
     auto orig_profileOnUpdate = reinterpret_cast<bool (__fastcall*)(int)>(0x44d4a0);
+    auto orig_loadMainMenu = reinterpret_cast<void* (__fastcall*)(int, int, int)>(0x41e420);
 
     template<int N> static inline void TamperCode(int addr, uint8_t (&code)[N]) {
         for (int i = 0; i < N; ++i) {
@@ -42,19 +39,15 @@ namespace {
     };
 }
 
-static int __fastcall connectToGame(int a, int b, int c, int d, int e, int f) {
-    if (palettes[0]) delete palettes[0];
-    if (palettes[1]) delete palettes[1];
-    palettes[0] = palettes[1] = 0; loadId = 0;
-    return orig_connectToGame(a, b, c, d, e, f);
-}
-
-template <void(__fastcall*& ORIG)(int, int, int)>
-static void __fastcall selectOnEnter(int self, int a, int b) {
-    if (palettes[0]) delete palettes[0];
-    if (palettes[1]) delete palettes[1];
-    palettes[0] = palettes[1] = 0; loadId = 0;
-    return ORIG(self, a, b);
+static void* __fastcall loadMainMenu(int self, int a, int b) {
+#ifdef _DEBUG
+    logging << "loadMainMenu("<<b<<");" << std::endl;
+#endif
+    if (b == SokuLib::SCENE_TITLE) {
+        if (palettes[0]) { palettes[0]->list; delete palettes[0]; }
+        if (palettes[1]) { palettes[1]->list; delete palettes[1]; }
+        palettes[0] = palettes[1] = 0; loadId = 0;
+    } return orig_loadMainMenu(self, a, b);
 }
 
 static int __fastcall selectOnRender(SokuLib::Select* selectObj) {
@@ -66,11 +59,7 @@ static int __fastcall selectOnRender(SokuLib::Select* selectObj) {
         if (playerId == 0 && selectObj->base.VTable == (void*)0x857534
             || playerId == 1 && selectObj->base.VTable == (void*)0x8574dc) continue;
         SokuLib::MenuCursor::render(guiOffset[playerId][0], guiOffset[playerId][1], 150);
-        palettes[playerId]->render(palettes[playerId]->currentPalette - 2, guiOffset[playerId][0] - 12, guiOffset[playerId][1] - 36);
-        palettes[playerId]->render(palettes[playerId]->currentPalette - 1, guiOffset[playerId][0] -  5, guiOffset[playerId][1] - 18);
-        palettes[playerId]->render(palettes[playerId]->currentPalette    , guiOffset[playerId][0]     , guiOffset[playerId][1]     );
-        palettes[playerId]->render(palettes[playerId]->currentPalette + 1, guiOffset[playerId][0] -  5, guiOffset[playerId][1] + 18);
-        palettes[playerId]->render(palettes[playerId]->currentPalette + 2, guiOffset[playerId][0] - 12, guiOffset[playerId][1] + 36);
+        palettes[playerId]->render(guiOffset[playerId][0], guiOffset[playerId][1]);
     }
 
     return ret;
@@ -91,36 +80,35 @@ static void __fastcall setPaletteSelect(SokuLib::Select* selectObj, int unused, 
 #ifdef _DEBUG
     logging << "setPaletteSelect(0x"<<(void*)selectObj<<", "<<playerId<<", "<<charId<<", "<<paletteId<<", "<<isFirst<<");"<< std::endl;
 #endif
-    // disable for opponent in netplay
-    if (playerId == 0 && selectObj->base.VTable == (void*)0x857534
-        || playerId == 1 && selectObj->base.VTable == (void*)0x8574dc) {
-        if (isFirst) {
+    if (isFirst) {
+        loadId = 0;
+        if (palettes[playerId] && palettes[playerId]->list->charId != charId) {
+            delete palettes[playerId]->list;
+            delete palettes[playerId];
+            palettes[playerId] = 0;
+        }
+        if (!palettes[playerId]) {
             auto name = SokuLib::union_cast<const char* (*)(int)>(0x43f3f0)(charId);
             wchar_t wname[24]; MultiByteToWideChar(CP_ACP, 0, name, -1, wname, 24);
-            palettes[playerId] = new PaletteList(charId, wname);
-            if (palettes[playerId]->opponentPalette == -1) {
+            palettes[playerId] = new PaletteInput();
+            palettes[playerId]->list = new PaletteList(charId, wname);
+            palettes[playerId]->reset(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos, palettes[playerId]->list->startingPalette);
+        }
+    }
+
+    if (playerId == 0 && SokuLib::mainMode == SokuLib::BATTLE_MODE_VSSERVER
+        || playerId == 1 && SokuLib::mainMode == SokuLib::BATTLE_MODE_VSCLIENT) {
+        if (isFirst) {
+            if (palettes[playerId]->list->opponentPalette == -1) {
                 delete palettes[playerId];
                 palettes[playerId] = 0;
             } else {
-                palettes[playerId]->currentPalette = palettes[playerId]->opponentPalette;
+                palettes[playerId]->currentPalette = palettes[playerId]->list->opponentPalette;
+                if (palettes[playerId]->currentPalette < 0) palettes[playerId]->currentPalette = 0;
             }
-        }
-        return orig_setPaletteSelect(selectObj, unused, playerId, charId, paletteId, isFirst);
-    }
-
-    if (isFirst) { loadId = 0;
-        auto name = SokuLib::union_cast<const char* (*)(int)>(0x43f3f0)(charId);
-        wchar_t wname[24]; MultiByteToWideChar(CP_ACP, 0, name, -1, wname, 24);
-        if (palettes[playerId]) delete palettes[playerId];
-        palettes[playerId] = new PaletteList(charId, wname);
-        palettes[playerId]->reset(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
-    } else {
-        palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
-    }
-
-    for (int i = palettes[playerId]->currentPalette - 2; i <= palettes[playerId]->currentPalette + 2; ++i) {
-        palettes[playerId]->createTextTexture(i);
-    }
+        } else if (palettes[playerId]->list->opponentPalette == -2)
+            palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
+    } else palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
 
     return orig_setPaletteSelect(selectObj, unused, playerId, charId, paletteId, isFirst);
 }
@@ -134,21 +122,25 @@ static bool __stdcall loadPaletteSelect(char* buffer, int playerId, const char* 
         return false;
     }
 
-    if (palettes[playerId]->useDefaults && palettes[playerId]->currentPalette < 8) {
+    if (palettes[playerId]->list->useDefaults && palettes[playerId]->currentPalette < 8) {
         wsprintf(buffer, "data/character/%s/palette%03d.bmp", name, palettes[playerId]->currentPalette);
         return false;
     }
 
     int paletteIndex = palettes[playerId]->currentPalette;
-    if (palettes[playerId]->useDefaults) paletteIndex -= 8;
-    return loadPalette(palettes[playerId]->customPalettes[paletteIndex]);
+    if (palettes[playerId]->list->useDefaults) paletteIndex -= 8;
+    return loadPalette(palettes[playerId]->list->customPalettes[paletteIndex]);
 }
 
 static bool __stdcall loadPalettePattern(char* buffer, const char* name, int paletteId) {
 #ifdef _DEBUG
     logging << "loadPalettePattern(0x"<<(void*)buffer<<", "<<name<<", "<<paletteId<<");"<< std::endl;
 #endif
-    return loadPaletteSelect(buffer, loadId++ % 2, name, paletteId);
+    int id = loadId++ % 2;
+    if (id && palettes[0] && palettes[1] && palettes[0]->currentPalette == palettes[1]->currentPalette)
+        palettes[1]->currentPalette = palettes[1]->currentPalette == 0 && palettes[1]->list->maxPalettes() ? 1 : 0;
+
+    return loadPaletteSelect(buffer, id, name, paletteId);
 }
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
@@ -180,7 +172,6 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
     VirtualProtect((LPVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_WRITECOPY, &old);
     orig_setPaletteSelect = SokuLib::TamperNearCall(0x42087d, setPaletteSelect);
     orig_selectOnRender = SokuLib::TamperNearCall(0x421561, selectOnRender);
-    orig_connectToGame = SokuLib::TamperNearCall(0x446cc0, connectToGame);
     TamperCode(0x41ff97, {
         0x57,                           // push EDI
         0x52,                           // push EDX
@@ -202,10 +193,8 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
     VirtualProtect((LPVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, old, &old);
 
     VirtualProtect((LPVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_WRITECOPY, &old);
-    orig_selectOnEnter = SokuLib::TamperDword((DWORD)&SokuLib::VTable_Select.unknown2, selectOnEnter<orig_selectOnEnter>);
-    orig_selectCLOnEnter = SokuLib::TamperDword((DWORD)&SokuLib::VTable_SelectClient.unknown2, selectOnEnter<orig_selectCLOnEnter>);
-    orig_selectSVOnEnter = SokuLib::TamperDword((DWORD)&SokuLib::VTable_SelectServer.unknown2, selectOnEnter<orig_selectSVOnEnter>);
     orig_profileOnUpdate = SokuLib::TamperDword((DWORD)0x859878, profileOnUpdate);
+    orig_loadMainMenu = SokuLib::TamperDword((DWORD)0x861af0, loadMainMenu);
     VirtualProtect((LPVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
 
     return true;
