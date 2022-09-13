@@ -48,11 +48,12 @@ static bool loadActPalette(std::istream& input) {
             palette.data = SokuLib::NewFct(1024);
         } else if (!palette.data) palette.data = SokuLib::NewFct(1024);
 
+        palette.bitsPerPixel = 32;
         for (int i = 0; i < 256; ++i) {
             ((int32_t*)palette.data)[i] =
-                i == 0 ? 0 : 0xff000000
-                | (uint32_t)buffer[i*3] << 16
-                | (uint32_t)buffer[i*3+1] << 8
+                (i == 0 ? 0 : 0xff000000)
+                | ((uint32_t)buffer[i*3] << 16)
+                | ((uint32_t)buffer[i*3+1] << 8)
                 | (uint32_t)buffer[i*3+2];
         }
     } else {
