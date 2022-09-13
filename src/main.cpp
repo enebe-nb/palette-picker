@@ -100,6 +100,7 @@ static void __fastcall setPaletteSelect(SokuLib::Select* selectObj, int unused, 
         || playerId == 1 && SokuLib::mainMode == SokuLib::BATTLE_MODE_VSCLIENT) {
         if (isFirst) {
             if (palettes[playerId]->list->opponentPalette == -1) {
+                delete palettes[playerId]->list;
                 delete palettes[playerId];
                 palettes[playerId] = 0;
             } else {
@@ -108,7 +109,13 @@ static void __fastcall setPaletteSelect(SokuLib::Select* selectObj, int unused, 
             }
         } else if (palettes[playerId] && palettes[playerId]->list->opponentPalette == -2)
             palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
-    } else palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
+    } else {
+        if (isFirst && !palettes[playerId]->list->customPalettes.size()) {
+                delete palettes[playerId]->list;
+                delete palettes[playerId];
+                palettes[playerId] = 0;
+        } else if (palettes[playerId]) palettes[playerId]->handleInput(((SokuLib::InputHandler*)&selectObj->leftSelect)[playerId*2+1].pos);
+    }
 
     return orig_setPaletteSelect(selectObj, unused, playerId, charId, paletteId, isFirst);
 }
