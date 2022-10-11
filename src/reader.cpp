@@ -159,7 +159,8 @@ static bool loadBitmapPalette(std::istream& input) {
 
 bool loadPalette(const std::filesystem::path& path) {
 #ifdef _DEBUG
-    logging << "loadPalette(\""<<path<<"\");"<< std::endl;
+    const std::string spath = ws2s(path);
+    logging << "loadPalette(\""<<spath<<"\");"<< std::endl;
 #endif
     if (path.extension() == L".pal") {
         std::ifstream input(path, std::ios::binary);
@@ -181,4 +182,6 @@ bool loadPalette(const std::filesystem::path& path) {
         std::ifstream input(path, std::ios::binary);
         return loadBitmapPalette(input);
     }
+
+    return false;
 }

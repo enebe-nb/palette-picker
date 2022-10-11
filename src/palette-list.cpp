@@ -212,7 +212,7 @@ void PaletteInput::_render(int pos, int x, int y) {
 
     if (customPalettesText.size() <= pos) customPalettesText.resize(pos+1, 0);
     if (!customPalettesText[pos]) {
-        const std::string name = list->customPalettes[pos].stem().string();
+        const std::string name = ws2s(list->customPalettes[pos].stem());
         customPalettesText[pos] = new SokuLib::Sprite();
         int texId; SokuLib::textureMgr.createTextTexture(&texId, name.c_str(), *font, 150, 20, 0, 0);
         customPalettesText[pos]->setTexture2(texId, 0, 0, 150, 20);
